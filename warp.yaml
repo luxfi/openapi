@@ -1,0 +1,167 @@
+openapi: '3.1.0'
+info:
+  title: Warp API
+  description: |
+    Cross-chain message verification. The warp surface lets one chain
+    sign a structured payload that another chain (or an off-chain
+    relayer) can verify against the source chain's BLS-aggregated
+    validator signature.
+
+    The on-chain warp messenger precompile (`0x0200…0005` on EVMs)
+    pairs with this surface: a contract on chain A emits a warp
+    payload; relayers query the source chain's nodes for aggregate
+    signatures; the consumer chain verifies the aggregate against the
+    source chain's validator set at the message's emission height.
+
+    See LP-021 for the full envelope specification.
+
+    All methods are JSON-RPC 2.0. Mount point: `/ext/warp` (operator
+    surface) and warp-payload retrieval per-chain at
+    `/ext/bc/<chain>/warp`.
+
+    Canonical implementation: `~/work/lux/node/vms/platformvm/warp/`
+    and `~/work/lux/node/service/warp/service.go`.
+  version: '1.0.0'
+  contact:
+    name: Lux Industries
+    url: https://lux.network
+
+servers:
+  - url: https://api.lux.network/v1
+  - url: https://api-test.lux.network/v1
+  - url: https://api-dev.lux.network/v1
+
+tags:
+  - name: Publish
+    description: Operator surface for publishing chain IPCs.
+  - name: Message
+    description: Warp message structure.
+
+paths:
+  /ext/warp:
+    post:
+      summary: Warp JSON-RPC
+      operationId: warp.rpc
+      description: |
+        Single JSON-RPC endpoint for warp publish/unpublish operations.
+        Canonical impl: `~/work/lux/node/service/warp/service.go`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/PublishBlockchainRequest'
+                - $ref: '#/components/schemas/UnpublishBlockchainRequest'
+                - $ref: '#/components/schemas/GetPublishedBlockchainsRequest'
+      responses:
+        '200':
+          description: JSON-RPC envelope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonRpcResponse'
+
+components:
+  schemas:
+
+    JsonRpcResponse:
+      type: object
+      required: [jsonrpc, id, result]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        result: {}
+
+    BlockchainID:
+      type: string
+      description: Base58-encoded 32-byte chain identifier.
+
+    UnsignedMessage:
+      type: object
+      description: |
+        Per-LP-021 unsigned warp message envelope.
+        Canonical impl:
+        `~/work/lux/node/vms/platformvm/warp/unsigned_message.go`.
+      required: [networkID, sourceChainID, payload]
+      properties:
+        networkID:
+          type: integer
+          description: Network ID of the message origin.
+        sourceChainID:
+          $ref: '#/components/schemas/BlockchainID'
+        payload:
+          type: string
+          description: Hex-encoded payload bytes; opaque to the warp layer.
+
+    BitSetSignature:
+      type: object
+      description: |
+        BLS-aggregated signature over an `UnsignedMessage` produced by
+        a subset of the source chain's validator set. The `signers`
+        bit-set names the participating validators in canonical sort
+        order; the verifier reconstructs the public-key aggregate by
+        AND-ing the bit-set against the validator set at the message's
+        height.
+        Canonical impl:
+        `~/work/lux/node/vms/platformvm/warp/signature.go`.
+      required: [signers, signature]
+      properties:
+        signers:
+          type: string
+          description: Hex-encoded bit-set of participating validator indices.
+        signature:
+          type: string
+          description: Hex-encoded BLS12-381 aggregate signature (96 bytes).
+
+    Message:
+      type: object
+      description: |
+        Signed warp message — `UnsignedMessage` + `BitSetSignature`.
+      required: [unsignedMessage, signature]
+      properties:
+        unsignedMessage:
+          $ref: '#/components/schemas/UnsignedMessage'
+        signature:
+          $ref: '#/components/schemas/BitSetSignature'
+
+    PublishBlockchainRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['warp.publishBlockchain'] }
+        params:
+          type: object
+          required: [blockchainID]
+          properties:
+            blockchainID: { $ref: '#/components/schemas/BlockchainID' }
+        description: |
+          Publishes per-chain consensus and decisions IPC streams.
+          Canonical impl:
+          `~/work/lux/node/service/warp/service.go:PublishBlockchain`.
+
+    UnpublishBlockchainRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['warp.unpublishBlockchain'] }
+        params:
+          type: object
+          required: [blockchainID]
+          properties:
+            blockchainID: { $ref: '#/components/schemas/BlockchainID' }
+
+    GetPublishedBlockchainsRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['warp.getPublishedBlockchains'] }
+        params:
+          type: object
+          maxProperties: 0

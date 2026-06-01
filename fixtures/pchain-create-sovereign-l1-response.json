@@ -1,0 +1,16 @@
+{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+        "txID": "2asiyKwFzyNJRDswfQTdNMPLav5fCVkYn7xt7od37EDmi4eqfG",
+        "netID": "kZN2L6Vp9bRBqnpQyV5HRm9p1zP9Q1yQ4n4oRT8sNUyPyYJrK",
+        "chains": [
+            {
+                "id": "S5bq8gFMnitrJzq55zBPiMX1MAhRQFRZXWXWhqVXBi3ViRR3b",
+                "name": "primary evm",
+                "vmID": "EVM11111111111111111111111111111111LpoYY"
+            }
+        ],
+        "changeAddr": "P-lux15953qfaga3w5txjmr0fl4clu37kak0ah4gjprr"
+    }
+}

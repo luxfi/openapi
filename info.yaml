@@ -1,0 +1,291 @@
+openapi: '3.1.0'
+info:
+  title: Info API
+  description: |
+    Node-info surface. Read-only. Returns chain state, peers,
+    bootstrap status, fee schedule, and the local node's identity.
+    Safe to expose publicly; no admin token required.
+
+    All methods are JSON-RPC 2.0. Mount point: `/ext/info`.
+
+    Canonical implementation: `~/work/lux/node/service/info/service.go`.
+  version: '1.0.0'
+  contact:
+    name: Lux Industries
+    url: https://lux.network
+
+servers:
+  - url: https://api.lux.network/v1
+  - url: https://api-test.lux.network/v1
+  - url: https://api-dev.lux.network/v1
+
+tags:
+  - name: Identity
+    description: Node identity and version.
+  - name: Network
+    description: Network identity, peers, bootstrap.
+  - name: Chain
+    description: Chain lookups + alias resolution.
+  - name: Fees
+    description: Fee schedule + upgrade timeline.
+
+paths:
+  /ext/info:
+    post:
+      summary: Info JSON-RPC
+      operationId: info.rpc
+      description: |
+        Single JSON-RPC endpoint. `method` field selects the
+        operation. Canonical impl:
+        `~/work/lux/node/service/info/service.go`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/GetNodeVersionRequest'
+                - $ref: '#/components/schemas/GetNodeIDRequest'
+                - $ref: '#/components/schemas/GetNodeIPRequest'
+                - $ref: '#/components/schemas/GetNetworkIDRequest'
+                - $ref: '#/components/schemas/GetNetworkNameRequest'
+                - $ref: '#/components/schemas/GetBlockchainIDRequest'
+                - $ref: '#/components/schemas/PeersRequest'
+                - $ref: '#/components/schemas/IsBootstrappedRequest'
+                - $ref: '#/components/schemas/UpgradesRequest'
+                - $ref: '#/components/schemas/UptimeRequest'
+                - $ref: '#/components/schemas/LpsRequest'
+                - $ref: '#/components/schemas/GetTxFeeRequest'
+                - $ref: '#/components/schemas/GetVMsRequest'
+                - $ref: '#/components/schemas/GetChainsRequest'
+      responses:
+        '200':
+          description: JSON-RPC envelope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonRpcResponse'
+
+components:
+  schemas:
+
+    NodeID:
+      type: string
+      example: 'NodeID-2TwSZ2oyeBK2mv7JiseEQ8m74rotDj4QR'
+    NetID:
+      type: string
+      example: '11111111111111111111111111111111LpoYY'
+    ChainID:
+      type: string
+    Uint64Str:
+      type: string
+      pattern: '^[0-9]+$'
+
+    JsonRpcResponse:
+      type: object
+      required: [jsonrpc, id, result]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        result: {}
+
+    Signer:
+      type: object
+      required: [publicKey, proofOfPossession]
+      properties:
+        publicKey:
+          type: string
+          pattern: '^0x[0-9a-fA-F]{96}$'
+        proofOfPossession:
+          type: string
+          pattern: '^0x[0-9a-fA-F]{192}$'
+
+    Peer:
+      type: object
+      required: [ip, publicIP, nodeID, version]
+      properties:
+        ip: { type: string }
+        publicIP: { type: string }
+        nodeID: { $ref: '#/components/schemas/NodeID' }
+        version: { type: string }
+        lastSent: { type: string, format: date-time }
+        lastReceived: { type: string, format: date-time }
+        observedUptime: { $ref: '#/components/schemas/Uint64Str' }
+        trackedNets:
+          type: array
+          items: { $ref: '#/components/schemas/NetID' }
+        benched:
+          type: array
+          items: { type: string }
+
+    GetNodeVersionRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['info.getNodeVersion'] }
+        params: { type: object }
+        description: |
+          Returns version, database version, RPC protocol version,
+          git commit, and per-VM versions.
+          Canonical impl: `service/info/service.go:GetNodeVersion`.
+
+    GetNodeIDRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['info.getNodeID'] }
+        params: { type: object }
+        description: |
+          Returns this node's bech32 NodeID and BLS proof-of-possession.
+          Canonical impl: `service/info/service.go:GetNodeID`.
+
+    GetNodeIPRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['info.getNodeIP'] }
+        params: { type: object }
+
+    GetNetworkIDRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['info.getNetworkID'] }
+        params: { type: object }
+        description: |
+          Returns the primary network ID this node is connected to.
+          Canonical primary network IDs: `1` mainnet, `2` testnet,
+          `3` local, `1337` development / localnet. Anything else is
+          a custom network.
+          Canonical impl: `service/info/service.go:GetNetworkID`.
+
+    GetNetworkNameRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['info.getNetworkName'] }
+        params: { type: object }
+
+    GetBlockchainIDRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['info.getBlockchainID'] }
+        params:
+          type: object
+          required: [alias]
+          properties:
+            alias: { type: string }
+          description: |
+            Resolves a chain alias (e.g. `P`, `X`, `C`) to its
+            base58 chain ID.
+            Canonical impl: `service/info/service.go:GetBlockchainID`.
+
+    PeersRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['info.peers'] }
+        params:
+          type: object
+          properties:
+            nodeIDs:
+              type: array
+              items: { $ref: '#/components/schemas/NodeID' }
+              description: Optional filter. Empty array returns all peers.
+          description: |
+            Returns connected peers.
+            Canonical impl: `service/info/service.go:Peers`.
+
+    IsBootstrappedRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['info.isBootstrapped'] }
+        params:
+          type: object
+          required: [chain]
+          properties:
+            chain: { type: string, description: 'Chain alias (e.g. `P`, `X`, `C`) or base58 ID.' }
+          description: |
+            Returns whether the named chain is fully bootstrapped.
+            For the primary network, P-Chain bootstrap implies validator
+            state is loaded and the consensus engine is participating.
+            Canonical impl: `service/info/service.go:IsBootstrapped`.
+
+    UpgradesRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['info.upgrades'] }
+        params: { type: object }
+
+    UptimeRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['info.uptime'] }
+        params: { type: object }
+        description: |
+          Returns this node's observed uptime as a percentage of the
+          stake-weighted validator set. Canonical impl:
+          `service/info/service.go:Uptime`.
+
+    LpsRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['info.lps'] }
+        params: { type: object }
+        description: |
+          Returns the LP (Lux Proposal) activation table for this
+          node.
+
+    GetTxFeeRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['info.getTxFee'] }
+        params: { type: object }
+
+    GetVMsRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['info.getVMs'] }
+        params: { type: object }
+
+    GetChainsRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['info.getChains'] }
+        params: { type: object }

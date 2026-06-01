@@ -1,0 +1,187 @@
+openapi: '3.1.0'
+info:
+  title: Health API
+  description: |
+    Three orthogonal health surfaces:
+
+    - **liveness** — process is running. Returns 200 if the node is
+      alive; never returns false-positive 503.
+    - **readiness** — process is ready to serve traffic. Returns 503
+      while the node is bootstrapping; returns 200 once every tracked
+      chain has reported `bootstrapped=true`.
+    - **deep (`health`)** — full health check including peer count,
+      consensus participation, and per-chain liveness.
+
+    Each surface is exposed as both a plain HTTP GET (for load
+    balancers) and a JSON-RPC method (for programmatic clients).
+
+    Canonical implementation: `~/work/lux/node/service/health/service.go`.
+  version: '1.0.0'
+  contact:
+    name: Lux Industries
+    url: https://lux.network
+
+servers:
+  - url: https://api.lux.network/v1
+  - url: https://api-test.lux.network/v1
+  - url: https://api-dev.lux.network/v1
+
+paths:
+  /ext/health/liveness:
+    get:
+      summary: Liveness probe.
+      operationId: health.liveness.get
+      description: |
+        Plain HTTP GET. Returns 200 with `{"healthy":true}` if the
+        node process is alive. Use as the k8s liveness probe.
+      responses:
+        '200':
+          description: Process alive.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthReply'
+        '503':
+          description: Process unhealthy.
+
+  /ext/health/readiness:
+    get:
+      summary: Readiness probe.
+      operationId: health.readiness.get
+      description: |
+        Plain HTTP GET. Returns 200 once every tracked chain has
+        bootstrapped. Returns 503 while bootstrap is in progress.
+        Use as the k8s readiness probe.
+      responses:
+        '200':
+          description: Ready to serve.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthReply'
+        '503':
+          description: Not yet ready.
+
+  /ext/health:
+    get:
+      summary: Deep health check.
+      operationId: health.deep.get
+      description: |
+        Plain HTTP GET. Returns 200 if every registered health check
+        is passing. Returns 503 if any check is failing.
+      responses:
+        '200':
+          description: All checks passing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthReply'
+        '503':
+          description: One or more checks failing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthReply'
+    post:
+      summary: Health JSON-RPC
+      operationId: health.rpc
+      description: |
+        JSON-RPC variant. `method` selects the operation.
+        Canonical impl: `service/health/service.go`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/LivenessRequest'
+                - $ref: '#/components/schemas/ReadinessRequest'
+                - $ref: '#/components/schemas/HealthRequest'
+      responses:
+        '200':
+          description: JSON-RPC envelope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonRpcResponse'
+
+components:
+  schemas:
+
+    HealthReply:
+      type: object
+      required: [healthy]
+      properties:
+        healthy:
+          type: boolean
+        checks:
+          type: object
+          description: |
+            Map of check-name -> per-check result. Each entry has
+            `timestamp`, `duration`, `error` (string or null),
+            `contiguousFailures`, `timeOfFirstFailure`.
+          additionalProperties:
+            type: object
+            properties:
+              message: {}
+              timestamp: { type: string, format: date-time }
+              duration: { type: integer }
+              contiguousFailures: { type: integer }
+              timeOfFirstFailure: { type: string, format: date-time }
+              error: { type: ['string', 'null'] }
+
+    JsonRpcResponse:
+      type: object
+      required: [jsonrpc, id, result]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        result: { $ref: '#/components/schemas/HealthReply' }
+
+    LivenessRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['health.liveness'] }
+        params:
+          type: object
+          properties:
+            tags:
+              type: array
+              items: { type: string }
+        description: |
+          Canonical impl: `service/health/service.go:Liveness`.
+
+    ReadinessRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['health.readiness'] }
+        params:
+          type: object
+          properties:
+            tags:
+              type: array
+              items: { type: string }
+        description: |
+          Canonical impl: `service/health/service.go:Readiness`.
+
+    HealthRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['health.health'] }
+        params:
+          type: object
+          properties:
+            tags:
+              type: array
+              items: { type: string }
+        description: |
+          Canonical impl: `service/health/service.go:Health`.

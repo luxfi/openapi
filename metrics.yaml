@@ -1,0 +1,53 @@
+openapi: '3.1.0'
+info:
+  title: Metrics API
+  description: |
+    Prometheus scrape endpoint. Exposes the union of:
+
+    - process-level metrics (`go_*`, `process_*`)
+    - per-chain consensus metrics (block production rate, accepted/rejected
+      block counts, mempool depth, vote latency)
+    - per-VM metrics (per-tx-type fee, per-block size, per-tx success rate)
+    - network-layer metrics (peer count, ban rate, message throughput)
+
+    Output is the standard Prometheus text exposition format. Designed
+    for scrape by a Prometheus server (`scrape_interval: 15s` typical).
+
+    Canonical implementation: `~/work/lux/node/service/metrics/`.
+  version: '1.0.0'
+  contact:
+    name: Lux Industries
+    url: https://lux.network
+
+servers:
+  - url: https://api.lux.network/v1
+  - url: https://api-test.lux.network/v1
+  - url: https://api-dev.lux.network/v1
+
+paths:
+  /ext/metrics:
+    get:
+      summary: Prometheus scrape.
+      operationId: metrics.scrape
+      description: |
+        Returns the full metric family set in the Prometheus 0.0.4
+        text exposition format. Disabled by default in production
+        gateways (the scrape target is the node's internal port, not
+        the public gateway).
+
+        Canonical impl: `~/work/lux/node/service/metrics/`.
+      responses:
+        '200':
+          description: |
+            Prometheus text format. `Content-Type:
+            text/plain; version=0.0.4; charset=utf-8`.
+          content:
+            text/plain:
+              schema:
+                type: string
+                description: |
+                  Newline-separated metric families. Each family
+                  consists of optional `# HELP` and `# TYPE` lines
+                  followed by one or more sample lines.
+        '404':
+          description: Metrics endpoint disabled on this node.

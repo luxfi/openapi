@@ -1,0 +1,365 @@
+openapi: '3.1.0'
+info:
+  title: X-Chain API
+  description: |
+    Exchange Chain — UTXO settlement. The X-Chain runs the XVM
+    (formerly the asset-VM) for native-asset creation, transfer, and
+    atomic swap. UTXO model, deterministic finality, no contract
+    bytecode.
+
+    All methods are JSON-RPC 2.0. Mount point: `/ext/bc/X`.
+
+    Canonical implementation: `~/work/lux/node/vms/xvm/service.go`.
+  version: '1.0.0'
+  contact:
+    name: Lux Industries
+    url: https://lux.network
+
+servers:
+  - url: https://api.lux.network/v1
+  - url: https://api-test.lux.network/v1
+  - url: https://api-dev.lux.network/v1
+
+tags:
+  - name: State
+    description: Block + height queries.
+  - name: Assets
+    description: Asset creation + description.
+  - name: Balance
+    description: Address balance queries.
+  - name: Tx
+    description: Transaction issuance, status, history.
+  - name: Wallet
+    description: Send + import + export (requires keystore).
+
+paths:
+  /ext/bc/X:
+    post:
+      summary: X-Chain JSON-RPC
+      operationId: xchain.rpc
+      description: |
+        Single JSON-RPC endpoint. `method` field selects the
+        operation. Canonical impl:
+        `~/work/lux/node/vms/xvm/service.go`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/GetHeightRequest'
+                - $ref: '#/components/schemas/GetBlockRequest'
+                - $ref: '#/components/schemas/GetBlockByHeightRequest'
+                - $ref: '#/components/schemas/IssueTxRequest'
+                - $ref: '#/components/schemas/GetTxRequest'
+                - $ref: '#/components/schemas/GetTxStatusRequest'
+                - $ref: '#/components/schemas/GetUTXOsRequest'
+                - $ref: '#/components/schemas/GetAssetDescriptionRequest'
+                - $ref: '#/components/schemas/GetBalanceRequest'
+                - $ref: '#/components/schemas/GetAllBalancesRequest'
+                - $ref: '#/components/schemas/CreateAssetRequest'
+                - $ref: '#/components/schemas/SendRequest'
+                - $ref: '#/components/schemas/SendMultipleRequest'
+                - $ref: '#/components/schemas/MintRequest'
+                - $ref: '#/components/schemas/ImportRequest'
+                - $ref: '#/components/schemas/ExportRequest'
+      responses:
+        '200':
+          description: JSON-RPC envelope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonRpcResponse'
+
+components:
+  schemas:
+
+    Uint64Str:
+      type: string
+      pattern: '^[0-9]+$'
+
+    XChainAddress:
+      type: string
+      description: Bech32-encoded X-Chain address with `X-lux` HRP.
+      example: 'X-lux15953qfaga3w5txjmr0fl4clu37kak0ah4gjprr'
+
+    AssetID:
+      type: string
+      description: Base58-encoded 32-byte asset ID.
+
+    TxID:
+      type: string
+
+    JsonRpcResponse:
+      type: object
+      required: [jsonrpc, id, result]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        result: {}
+
+    GetHeightRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['xvm.getHeight'] }
+        params: { type: object }
+        description: |
+          Canonical impl: `vms/xvm/service.go:GetHeight`.
+
+    GetBlockRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['xvm.getBlock'] }
+        params:
+          type: object
+          required: [blockID]
+          properties:
+            blockID: { type: string }
+            encoding: { type: string, enum: [hex, json], default: hex }
+
+    GetBlockByHeightRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['xvm.getBlockByHeight'] }
+        params:
+          type: object
+          required: [height]
+          properties:
+            height: { $ref: '#/components/schemas/Uint64Str' }
+            encoding: { type: string, enum: [hex, json], default: hex }
+
+    IssueTxRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['xvm.issueTx'] }
+        params:
+          type: object
+          required: [tx]
+          properties:
+            tx: { type: string }
+            encoding: { type: string, enum: [hex], default: hex }
+        description: |
+          Canonical impl: `vms/xvm/service.go:IssueTx`.
+
+    GetTxRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['xvm.getTx'] }
+        params:
+          type: object
+          required: [txID]
+          properties:
+            txID: { $ref: '#/components/schemas/TxID' }
+            encoding: { type: string, enum: [hex, json], default: hex }
+
+    GetTxStatusRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['xvm.getTxStatus'] }
+        params:
+          type: object
+          required: [txID]
+          properties:
+            txID: { $ref: '#/components/schemas/TxID' }
+
+    GetUTXOsRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['xvm.getUTXOs'] }
+        params:
+          type: object
+          required: [addresses]
+          properties:
+            addresses:
+              type: array
+              items: { $ref: '#/components/schemas/XChainAddress' }
+            limit: { type: integer }
+            startIndex:
+              type: object
+              properties:
+                address: { type: string }
+                utxo: { type: string }
+
+    GetAssetDescriptionRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['xvm.getAssetDescription'] }
+        params:
+          type: object
+          required: [assetID]
+          properties:
+            assetID: { $ref: '#/components/schemas/AssetID' }
+
+    GetBalanceRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['xvm.getBalance'] }
+        params:
+          type: object
+          required: [address, assetID]
+          properties:
+            address: { $ref: '#/components/schemas/XChainAddress' }
+            assetID: { $ref: '#/components/schemas/AssetID' }
+
+    GetAllBalancesRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['xvm.getAllBalances'] }
+        params:
+          type: object
+          required: [address]
+          properties:
+            address: { $ref: '#/components/schemas/XChainAddress' }
+
+    CreateAssetRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['xvm.createAsset'] }
+        params:
+          type: object
+          required: [name, symbol, denomination, initialHolders]
+          properties:
+            name: { type: string }
+            symbol: { type: string }
+            denomination: { type: integer, minimum: 0, maximum: 32 }
+            initialHolders:
+              type: array
+              items:
+                type: object
+                required: [address, amount]
+                properties:
+                  address: { $ref: '#/components/schemas/XChainAddress' }
+                  amount: { $ref: '#/components/schemas/Uint64Str' }
+            username: { type: string }
+            password: { type: string }
+
+    SendRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['xvm.send'] }
+        params:
+          type: object
+          required: [amount, assetID, to, username, password]
+          properties:
+            amount: { $ref: '#/components/schemas/Uint64Str' }
+            assetID: { $ref: '#/components/schemas/AssetID' }
+            to: { $ref: '#/components/schemas/XChainAddress' }
+            from:
+              type: array
+              items: { $ref: '#/components/schemas/XChainAddress' }
+            username: { type: string }
+            password: { type: string }
+            changeAddr: { $ref: '#/components/schemas/XChainAddress' }
+            memo: { type: string }
+
+    SendMultipleRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['xvm.sendMultiple'] }
+        params:
+          type: object
+          required: [outputs, username, password]
+          properties:
+            outputs:
+              type: array
+              items:
+                type: object
+                required: [assetID, amount, to]
+                properties:
+                  assetID: { $ref: '#/components/schemas/AssetID' }
+                  amount: { $ref: '#/components/schemas/Uint64Str' }
+                  to: { $ref: '#/components/schemas/XChainAddress' }
+            username: { type: string }
+            password: { type: string }
+            changeAddr: { $ref: '#/components/schemas/XChainAddress' }
+            memo: { type: string }
+
+    MintRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['xvm.mint'] }
+        params:
+          type: object
+          required: [amount, assetID, to, username, password]
+          properties:
+            amount: { $ref: '#/components/schemas/Uint64Str' }
+            assetID: { $ref: '#/components/schemas/AssetID' }
+            to: { $ref: '#/components/schemas/XChainAddress' }
+            username: { type: string }
+            password: { type: string }
+
+    ImportRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['xvm.import'] }
+        params:
+          type: object
+          required: [to, sourceChain, username, password]
+          properties:
+            to: { $ref: '#/components/schemas/XChainAddress' }
+            sourceChain: { type: string }
+            username: { type: string }
+            password: { type: string }
+
+    ExportRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['xvm.export'] }
+        params:
+          type: object
+          required: [amount, assetID, to, targetChain, username, password]
+          properties:
+            amount: { $ref: '#/components/schemas/Uint64Str' }
+            assetID: { $ref: '#/components/schemas/AssetID' }
+            to: { type: string }
+            targetChain: { type: string }
+            username: { type: string }
+            password: { type: string }

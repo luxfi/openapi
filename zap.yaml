@@ -1,0 +1,192 @@
+openapi: '3.1.0'
+info:
+  title: ZAP RPC
+  description: |
+    **Z**ero-copy **A**pplication **P**rotocol — the binary RPC
+    transport. ZAP is the canonical Lux transport for node-to-node
+    and SDK-to-node RPC. JSON-RPC remains the documented entry point
+    for compatibility; ZAP is the production wire.
+
+    ZAP is binary, framed, and zero-copy. Handshake is hybrid PQ:
+    classical X25519 ECDH AND post-quantum ML-KEM-768 KEM are both
+    performed; the session key is derived from the concatenation of
+    both shared secrets. Identity authentication is ML-DSA-65
+    (post-quantum signature).
+
+    Authoritative implementation: `~/work/lux/zap/`.
+
+    OpenAPI v3.1 is HTTP-shaped, so the surface below is documented as
+    a single `/ext/zap` upgrade endpoint that returns 101 Switching
+    Protocols. The body of this spec documents the wire format ZAP
+    uses post-upgrade — read as documentation of the transport, not
+    as an HTTP API.
+  version: '1.0.0'
+  contact:
+    name: Lux Industries
+    url: https://lux.network
+
+servers:
+  - url: https://api.lux.network/v1
+  - url: https://api-test.lux.network/v1
+  - url: https://api-dev.lux.network/v1
+
+paths:
+  /ext/zap:
+    get:
+      summary: ZAP transport upgrade.
+      operationId: zap.upgrade
+      description: |
+        Upgrade the HTTP connection to the ZAP binary transport.
+        Initiator sends `Upgrade: ZAP/1.0`; responder replies with
+        `101 Switching Protocols`.
+
+        After upgrade, the wire follows the framing in
+        `components.schemas.ZapFrame`. Handshake follows
+        `components.schemas.ZapHandshake`.
+      parameters:
+        - in: header
+          name: Upgrade
+          required: true
+          schema:
+            type: string
+            enum: ['ZAP/1.0']
+        - in: header
+          name: Connection
+          required: true
+          schema:
+            type: string
+            enum: ['Upgrade']
+      responses:
+        '101':
+          description: |
+            Switching to ZAP. The connection is now a bidirectional
+            ZAP stream. See `components.schemas.ZapHandshake` for
+            the post-upgrade handshake.
+        '426':
+          description: Upgrade required (the upgrade header was missing or unknown).
+
+components:
+  schemas:
+
+    ZapFrameHeader:
+      type: object
+      description: |
+        Fixed 16-byte header on every ZAP message.
+        Canonical impl: `~/work/lux/zap/handshake/frames.go`.
+      required: [magic, version, flags, rootOffset, size]
+      properties:
+        magic:
+          type: string
+          pattern: '^ZAP\\x00$'
+          description: 4-byte magic - ASCII "ZAP" followed by a NUL byte.
+        version:
+          type: integer
+          minimum: 1
+          maximum: 1
+          description: Wire-format version. v1.0.0 is fixed at 1.
+        flags:
+          type: integer
+          description: |
+            Bit-flags. v1 defines:
+              - bit 0: compressed (LZ4)
+              - bit 1: handshake frame
+              - bit 2: control frame (PING/PONG/CLOSE)
+              - bits 3-15: reserved.
+        rootOffset:
+          type: integer
+          description: Byte offset within the data segment of the root struct.
+        size:
+          type: integer
+          description: Total message size in bytes including header.
+
+    ZapFrame:
+      type: object
+      description: |
+        A ZAP message: header + data segment.
+        Canonical impl: `~/work/lux/zap/builder.go`.
+      required: [header, data]
+      properties:
+        header:
+          $ref: '#/components/schemas/ZapFrameHeader'
+        data:
+          type: string
+          description: Hex-encoded data segment.
+
+    ZapSuite:
+      type: string
+      enum: [X25519_MLKEM_768]
+      description: |
+        v1 supports a single hybrid suite: X25519 (classical ECDH) +
+        ML-KEM-768 (post-quantum KEM). Both are performed every
+        handshake; the session key is `HKDF(X25519_SS || MLKEM_SS)`.
+
+    ZapHandshake:
+      type: object
+      description: |
+        Three-message handshake, all ZAP-framed (handshake flag set).
+        Canonical impl: `~/work/lux/zap/handshake/initiator.go`
+        and `responder.go`.
+      required: [suite, role]
+      properties:
+        suite:
+          $ref: '#/components/schemas/ZapSuite'
+        role:
+          type: string
+          enum: [initiator, responder]
+        hello:
+          type: object
+          description: |
+            HELLO (initiator -> responder): suite, X25519 ephemeral
+            public, ML-KEM-768 ciphertext target, optional PSK.
+          properties:
+            x25519EphPub:
+              type: string
+              description: 32-byte hex.
+            mlkemCt:
+              type: string
+              description: 1088-byte hex (ML-KEM-768 ciphertext).
+            psk:
+              type: string
+              description: Optional 32-byte hex pre-shared-key identifier.
+        helloResp:
+          type: object
+          description: |
+            HELLO_RESP (responder -> initiator): X25519 ephemeral
+            public, ML-KEM-768 KEM share, ML-DSA-65 signature over
+            the transcript.
+          properties:
+            x25519EphPub: { type: string }
+            mlkemShare: { type: string }
+            sig:
+              type: string
+              description: |
+                ML-DSA-65 (NIST FIPS 204) signature over the
+                concatenated transcript bytes. 3309 bytes hex.
+        confirm:
+          type: object
+          description: |
+            CONFIRM (initiator -> responder): ML-DSA-65 signature
+            over the transcript, completing mutual authentication.
+          properties:
+            sig: { type: string }
+
+    ZapIdentity:
+      type: object
+      description: |
+        Pinned identity for a ZAP peer.
+        Canonical impl: `~/work/lux/zap/identity_pq.go`.
+      required: [mldsaPub]
+      properties:
+        mldsaPub:
+          type: string
+          description: ML-DSA-65 public key, 1952 bytes hex.
+        nodeID:
+          type: string
+          description: Optional bech32 NodeID this identity binds to.
+
+    ZapTypeId:
+      type: string
+      enum: [bool, int8, uint8, int16, uint16, int32, uint32, int64, uint64, float32, float64, text, bytes, list, struct]
+      description: |
+        ZAP-supported field types. Lists carry an offset+length;
+        structs carry an offset to nested data.

@@ -1,0 +1,51 @@
+{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "platform.createSovereignL1",
+    "params": {
+        "owner": {
+            "locktime": "0",
+            "threshold": "1",
+            "addresses": [
+                "P-lux15953qfaga3w5txjmr0fl4clu37kak0ah4gjprr"
+            ]
+        },
+        "validators": [
+            {
+                "nodeID": "NodeID-2TwSZ2oyeBK2mv7JiseEQ8m74rotDj4QR",
+                "weight": "500000000000000000",
+                "balance": "100000000000",
+                "signer": {
+                    "publicKey": "0x84e20183f945fea4e08eb126338763a0508b15409f5fbb7e525013d5134069b1e1037226dc6bc295ab18d9c7605368cb",
+                    "proofOfPossession": "0xa6ae72e7ab56f3b845aecbb08c18aa1b1015d6b6a64a9cd48bd94c09c8ed4c129f7be01c3f868c0163e371821d65cf9d1283d14a49f2c1461a786e8eeba3ca7ea810a3f1427ffdb39e1121841aeccb6679a453b4145cff11caf1e4e67641eceb"
+                },
+                "remainingBalanceOwner": {
+                    "locktime": "0",
+                    "threshold": "1",
+                    "addresses": [
+                        "P-lux15953qfaga3w5txjmr0fl4clu37kak0ah4gjprr"
+                    ]
+                },
+                "deactivationOwner": {
+                    "locktime": "0",
+                    "threshold": "1",
+                    "addresses": [
+                        "P-lux15953qfaga3w5txjmr0fl4clu37kak0ah4gjprr"
+                    ]
+                }
+            }
+        ],
+        "chains": [
+            {
+                "blockchainName": "primary evm",
+                "vmID": "EVM11111111111111111111111111111111LpoYY",
+                "fxIDs": [],
+                "genesisData": "0x7b22636f6e666967223a7b22636861696e4964223a3530302c22"
+            }
+        ],
+        "managerChainIdx": 0,
+        "managerAddress": "0x010000000000000000000000000000000000000a",
+        "pqProfile": "hybrid",
+        "encoding": "hex"
+    }
+}

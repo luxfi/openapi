@@ -1,0 +1,344 @@
+openapi: '3.1.0'
+info:
+  title: Admin API
+  description: |
+    Operator-only node administration. Off by default. Enabled via
+    `--api-admin-enabled=true`. When enabled, the admin endpoint
+    requires an admin token (`--admin-api-secret`).
+
+    All methods are JSON-RPC 2.0. Mount point: `/ext/admin`.
+
+    Canonical implementation: `~/work/lux/node/service/admin/service.go`.
+  version: '1.0.0'
+  contact:
+    name: Lux Industries
+    url: https://lux.network
+
+servers:
+  - url: https://api.lux.network/v1
+  - url: https://api-test.lux.network/v1
+  - url: https://api-dev.lux.network/v1
+
+tags:
+  - name: Profiling
+    description: CPU, memory, lock profiling.
+  - name: Aliases
+    description: Chain + endpoint alias management.
+  - name: Logging
+    description: Per-logger level control.
+  - name: Plugins
+    description: VM plugin discovery + load.
+  - name: Backup
+    description: Database snapshot + restore.
+
+paths:
+  /ext/admin:
+    post:
+      summary: Admin JSON-RPC
+      operationId: admin.rpc
+      description: |
+        Single JSON-RPC endpoint. `method` field selects the
+        operation. Caller must hold the admin token; the admin handler
+        does not export OIDC-issued bearers.
+
+        Canonical impl: `~/work/lux/node/service/admin/service.go`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/StartCPUProfilerRequest'
+                - $ref: '#/components/schemas/StopCPUProfilerRequest'
+                - $ref: '#/components/schemas/MemoryProfileRequest'
+                - $ref: '#/components/schemas/LockProfileRequest'
+                - $ref: '#/components/schemas/AliasRequest'
+                - $ref: '#/components/schemas/AliasChainRequest'
+                - $ref: '#/components/schemas/GetChainAliasesRequest'
+                - $ref: '#/components/schemas/StacktraceRequest'
+                - $ref: '#/components/schemas/SetLoggerLevelRequest'
+                - $ref: '#/components/schemas/GetLoggerLevelRequest'
+                - $ref: '#/components/schemas/GetConfigRequest'
+                - $ref: '#/components/schemas/LoadVMsRequest'
+                - $ref: '#/components/schemas/DbGetRequest'
+                - $ref: '#/components/schemas/ListVMsRequest'
+                - $ref: '#/components/schemas/SetTrackedChainsRequest'
+                - $ref: '#/components/schemas/GetTrackedChainsRequest'
+                - $ref: '#/components/schemas/SnapshotRequest'
+                - $ref: '#/components/schemas/LoadRequest'
+                - $ref: '#/components/schemas/GetBackupMetadataRequest'
+      responses:
+        '200':
+          description: JSON-RPC envelope.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonRpcResponse'
+        '401':
+          description: Missing or invalid admin token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonRpcError'
+
+components:
+  securitySchemes:
+    adminToken:
+      type: http
+      scheme: bearer
+      description: |
+        Admin token configured via `--admin-api-secret`. Required for
+        every method on `/ext/admin`.
+
+  schemas:
+
+    JsonRpcResponse:
+      type: object
+      required: [jsonrpc, id, result]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        result: {}
+
+    JsonRpcError:
+      type: object
+      required: [jsonrpc, id, error]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: integer }
+            message: { type: string }
+
+    EmptyParams:
+      type: object
+      maxProperties: 0
+
+    StartCPUProfilerRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['admin.startCPUProfiler'] }
+        params: { $ref: '#/components/schemas/EmptyParams' }
+        description: |
+          Canonical impl: `service/admin/service.go:StartCPUProfiler`.
+
+    StopCPUProfilerRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['admin.stopCPUProfiler'] }
+        params: { $ref: '#/components/schemas/EmptyParams' }
+
+    MemoryProfileRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['admin.memoryProfile'] }
+        params: { $ref: '#/components/schemas/EmptyParams' }
+
+    LockProfileRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['admin.lockProfile'] }
+        params: { $ref: '#/components/schemas/EmptyParams' }
+
+    AliasRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['admin.alias'] }
+        params:
+          type: object
+          required: [endpoint, alias]
+          properties:
+            endpoint: { type: string }
+            alias: { type: string }
+          description: |
+            Aliases an arbitrary endpoint path. Canonical impl:
+            `service/admin/service.go:Alias`.
+
+    AliasChainRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['admin.aliasChain'] }
+        params:
+          type: object
+          required: [chain, alias]
+          properties:
+            chain: { type: string, description: Base58 chain ID. }
+            alias: { type: string }
+          description: |
+            Aliases a chain ID under a short name (e.g. `P`, `X`, `C`).
+            Canonical impl: `service/admin/service.go:AliasChain`.
+
+    GetChainAliasesRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['admin.getChainAliases'] }
+        params:
+          type: object
+          required: [chain]
+          properties:
+            chain: { type: string }
+
+    StacktraceRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['admin.stacktrace'] }
+        params: { $ref: '#/components/schemas/EmptyParams' }
+
+    SetLoggerLevelRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['admin.setLoggerLevel'] }
+        params:
+          type: object
+          properties:
+            loggerName: { type: string }
+            logLevel: { type: string, enum: [verbo, debug, trace, info, warn, error, fatal, off] }
+            displayLevel: { type: string, enum: [verbo, debug, trace, info, warn, error, fatal, off] }
+
+    GetLoggerLevelRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['admin.getLoggerLevel'] }
+        params:
+          type: object
+          properties:
+            loggerName: { type: string }
+
+    GetConfigRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['admin.getConfig'] }
+        params: { $ref: '#/components/schemas/EmptyParams' }
+
+    LoadVMsRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['admin.loadVMs'] }
+        params: { $ref: '#/components/schemas/EmptyParams' }
+        description: |
+          Re-scans the plugin directory and loads any new VM plugins.
+          Canonical impl: `service/admin/service.go:LoadVMs`.
+
+    DbGetRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['admin.dbGet'] }
+        params:
+          type: object
+          required: [key]
+          properties:
+            key: { type: string, description: hex-encoded key. }
+
+    ListVMsRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['admin.listVMs'] }
+        params: { $ref: '#/components/schemas/EmptyParams' }
+
+    SetTrackedChainsRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['admin.setTrackedChains'] }
+        params:
+          type: object
+          required: [trackedNets]
+          properties:
+            trackedNets:
+              type: array
+              items: { type: string, description: Base58 net ID. }
+
+    GetTrackedChainsRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['admin.getTrackedChains'] }
+        params: { $ref: '#/components/schemas/EmptyParams' }
+
+    SnapshotRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['admin.snapshot'] }
+        params:
+          type: object
+          required: [name]
+          properties:
+            name: { type: string, description: Snapshot label. }
+            chain: { type: string, description: 'Chain alias (e.g. `P`, `X`, `C`) or base58 ID.' }
+
+    LoadRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['admin.load'] }
+        params:
+          type: object
+          required: [name]
+          properties:
+            name: { type: string }
+
+    GetBackupMetadataRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['admin.getBackupMetadata'] }
+        params: { $ref: '#/components/schemas/EmptyParams' }
+
+security:
+  - adminToken: []

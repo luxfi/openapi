@@ -1,0 +1,380 @@
+openapi: '3.1.0'
+info:
+  title: C-Chain API
+  description: |
+    Contract Chain — the primary network's EVM. The C-Chain is the
+    canonical primary-network EVM; no other network on the primary set
+    runs the C-Chain. The C-Chain hosts the canonical EVM bytecode
+    runtime, the standard `eth_*` JSON-RPC surface, and the active
+    precompile set at fixed slot addresses.
+
+    The C-Chain is enabled by default on the primary network. The
+    `LUX_DISABLE_CCHAIN=1` env knob (node `configs/configs.go`) keeps
+    the C-Chain off when bootstrapping a non-primary L1. Any L1 launched
+    via `platform.createSovereignL1` has its own EVM and does NOT depend
+    on the C-Chain.
+
+    All methods are JSON-RPC 2.0. Mount point: `/ext/bc/C/rpc`.
+
+    Canonical implementation: `~/work/lux/evm/` (Coreth-derived).
+  version: '1.0.0'
+  contact:
+    name: Lux Industries
+    url: https://lux.network
+
+servers:
+  - url: https://api.lux.network/v1
+  - url: https://api-test.lux.network/v1
+  - url: https://api-dev.lux.network/v1
+
+tags:
+  - name: Chain
+    description: Chain-level queries (`eth_chainId`, `eth_blockNumber`).
+  - name: Block
+    description: Block lookups.
+  - name: Transaction
+    description: Transaction lookups + dispatch.
+  - name: State
+    description: State reads (`eth_call`, `eth_getLogs`).
+  - name: Gas
+    description: Gas estimation + pricing.
+  - name: Admin
+    description: Operator-only chain control.
+  - name: Precompile
+    description: Active precompile contract surface.
+
+paths:
+  /ext/bc/C/rpc:
+    post:
+      summary: C-Chain JSON-RPC
+      operationId: cchain.rpc
+      description: |
+        Standard `eth_*` JSON-RPC. Methods documented under
+        `components.schemas.*Request`.
+
+        Canonical impl: `~/work/lux/evm/internal/ethapi/api.go`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/EthChainIdRequest'
+                - $ref: '#/components/schemas/EthBlockNumberRequest'
+                - $ref: '#/components/schemas/EthGetBlockByNumberRequest'
+                - $ref: '#/components/schemas/EthGetBlockByHashRequest'
+                - $ref: '#/components/schemas/EthGetTransactionByHashRequest'
+                - $ref: '#/components/schemas/EthGetLogsRequest'
+                - $ref: '#/components/schemas/EthCallRequest'
+                - $ref: '#/components/schemas/EthSendRawTransactionRequest'
+                - $ref: '#/components/schemas/EthEstimateGasRequest'
+                - $ref: '#/components/schemas/EthGasPriceRequest'
+                - $ref: '#/components/schemas/AdminImportChainRequest'
+      responses:
+        '200':
+          description: JSON-RPC envelope. `result` shape matches the request method.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonRpcResponse'
+
+components:
+  schemas:
+
+    # Primitives ---------------------------------------------------
+
+    Hex:
+      type: string
+      pattern: '^0x[0-9a-fA-F]*$'
+      description: '0x-prefixed hex string. EVM quantities use minimal hex (no leading zeros).'
+
+    Address:
+      type: string
+      pattern: '^0x[0-9a-fA-F]{40}$'
+
+    Hash32:
+      type: string
+      pattern: '^0x[0-9a-fA-F]{64}$'
+
+    Quantity:
+      type: string
+      pattern: '^0x[0-9a-fA-F]+$'
+      description: Hex-encoded unsigned integer; no leading zeros except `0x0`.
+
+    BlockTag:
+      oneOf:
+        - $ref: '#/components/schemas/Quantity'
+        - type: string
+          enum: [earliest, latest, pending, safe, finalized]
+
+    # JSON-RPC envelopes -------------------------------------------
+
+    JsonRpcResponse:
+      type: object
+      required: [jsonrpc, id, result]
+      properties:
+        jsonrpc:
+          type: string
+          enum: ['2.0']
+        id:
+          oneOf:
+            - type: string
+            - type: integer
+        result: {}
+
+    # Method requests ----------------------------------------------
+
+    EthChainIdRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['eth_chainId'] }
+        params:
+          type: array
+          maxItems: 0
+        description: |
+          Returns the C-Chain's EIP-155 chain ID. Primary mainnet
+          C-Chain returns `0x1f4` (500). Canonical impl:
+          `~/work/lux/evm/internal/ethapi/api.go` (ChainID).
+
+    EthBlockNumberRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['eth_blockNumber'] }
+        params:
+          type: array
+          maxItems: 0
+
+    EthGetBlockByNumberRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['eth_getBlockByNumber'] }
+        params:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items:
+            oneOf:
+              - $ref: '#/components/schemas/BlockTag'
+              - type: boolean
+
+    EthGetBlockByHashRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['eth_getBlockByHash'] }
+        params:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items:
+            oneOf:
+              - $ref: '#/components/schemas/Hash32'
+              - type: boolean
+
+    EthGetTransactionByHashRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['eth_getTransactionByHash'] }
+        params:
+          type: array
+          minItems: 1
+          maxItems: 1
+          items:
+            $ref: '#/components/schemas/Hash32'
+
+    EthGetLogsRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['eth_getLogs'] }
+        params:
+          type: array
+          minItems: 1
+          maxItems: 1
+          items:
+            type: object
+            properties:
+              fromBlock: { $ref: '#/components/schemas/BlockTag' }
+              toBlock: { $ref: '#/components/schemas/BlockTag' }
+              address:
+                oneOf:
+                  - $ref: '#/components/schemas/Address'
+                  - type: array
+                    items: { $ref: '#/components/schemas/Address' }
+              topics:
+                type: array
+                items:
+                  oneOf:
+                    - $ref: '#/components/schemas/Hash32'
+                    - type: array
+                      items: { $ref: '#/components/schemas/Hash32' }
+                    - type: 'null'
+              blockHash: { $ref: '#/components/schemas/Hash32' }
+
+    EthCallRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['eth_call'] }
+        params:
+          type: array
+          minItems: 1
+          maxItems: 2
+          items:
+            oneOf:
+              - $ref: '#/components/schemas/CallObject'
+              - $ref: '#/components/schemas/BlockTag'
+
+    CallObject:
+      type: object
+      properties:
+        from: { $ref: '#/components/schemas/Address' }
+        to: { $ref: '#/components/schemas/Address' }
+        gas: { $ref: '#/components/schemas/Quantity' }
+        gasPrice: { $ref: '#/components/schemas/Quantity' }
+        value: { $ref: '#/components/schemas/Quantity' }
+        data: { $ref: '#/components/schemas/Hex' }
+
+    EthSendRawTransactionRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['eth_sendRawTransaction'] }
+        params:
+          type: array
+          minItems: 1
+          maxItems: 1
+          items:
+            $ref: '#/components/schemas/Hex'
+        description: |
+          Issues a signed transaction. The signed bytes carry the
+          EIP-155 chain ID; the C-Chain rejects txs whose chainId
+          does not match its own (`eth_chainId`).
+
+    EthEstimateGasRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['eth_estimateGas'] }
+        params:
+          type: array
+          minItems: 1
+          maxItems: 2
+          items:
+            oneOf:
+              - $ref: '#/components/schemas/CallObject'
+              - $ref: '#/components/schemas/BlockTag'
+
+    EthGasPriceRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['eth_gasPrice'] }
+        params:
+          type: array
+          maxItems: 0
+
+    AdminImportChainRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['admin_importChain'] }
+        params:
+          type: array
+          minItems: 1
+          maxItems: 1
+          items:
+            type: string
+            description: Absolute filesystem path to the chain export.
+        description: |
+          Operator-only. Imports a previously-exported chain into the
+          local node. Auth is enforced upstream of the JSON-RPC
+          handler (admin endpoint requires admin token).
+
+    # Precompiles --------------------------------------------------
+
+    Precompile:
+      type: object
+      description: One active precompile contract on the C-Chain.
+      required: [address, name, kind, lp]
+      properties:
+        address:
+          $ref: '#/components/schemas/Address'
+        name:
+          type: string
+        kind:
+          type: string
+          enum: [allowlist, manager, native, warp, crypto]
+        lp:
+          type: string
+          description: LP that fully specifies this precompile's semantics.
+
+  examples:
+
+    PrecompileTable:
+      summary: Active precompile slot table — v1.0.0 lock-in.
+      description: |
+        Each entry below is one active precompile on the C-Chain at
+        v1.0.0. The address is fixed; precompile registration is part
+        of the C-Chain genesis. The LP column cites the proposal that
+        defines the precompile's full semantics.
+
+        Canonical implementation:
+        `~/work/lux/evm/precompile/contracts/<name>/module.go`.
+      value:
+        - address: '0x0000000000000000000000000000000000010201'
+          name: deployerAllowList
+          kind: allowlist
+          lp: LP-002
+          notes: Restricts contract deployment to listed addresses.
+        - address: '0x0000000000000000000000000000000000010205'
+          name: rewardManager
+          kind: manager
+          lp: LP-002
+          notes: Configures fee-rewards destination.
+        - address: '0x0000000000000000000000000000000000010301'
+          name: txAllowList
+          kind: allowlist
+          lp: LP-002
+          notes: Restricts tx senders to listed addresses.
+        - address: '0x0000000000000000000000000000000000010401'
+          name: nativeMinter
+          kind: native
+          lp: LP-002
+          notes: Mints native currency to specified addresses.
+        - address: '0x0000000000000000000000000000000000013F01'
+          name: feeManager
+          kind: manager
+          lp: LP-002
+          notes: Configures dynamic fee parameters.
+        - address: '0x0200000000000000000000000000000000000005'
+          name: warpMessenger
+          kind: warp
+          lp: LP-021
+          notes: Sends + verifies cross-chain warp messages.

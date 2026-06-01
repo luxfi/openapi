@@ -1,0 +1,787 @@
+openapi: '3.1.0'
+info:
+  title: P-Chain API
+  description: |
+    Platform Chain — the validator-and-chain registry of the primary
+    network. The P-Chain holds the canonical record of:
+
+    - every validator and its stake
+    - every L1 (independent network anchored to the primary set)
+    - every chain (one VM + one genesis blob) registered under an L1
+    - every staking reward and reward-pool balance
+
+    Transactions on the P-Chain mutate that registry. RPC reads expose
+    its state. The v1 atomic primitive `platform.createSovereignL1`
+    collapses what was a four-tx sequence (CreateNetworkTx +
+    AddChainValidatorTx ×N + CreateChainTx ×K + ConvertNetworkToL1Tx)
+    into a single tx that either lands wholly or reverts wholly.
+
+    All methods are JSON-RPC 2.0. Mount point on every node:
+    `/ext/bc/P` (or aliased as `/ext/P` post v1.28).
+
+    Canonical implementation: `~/work/lux/node/vms/platformvm/service.go`.
+  version: '1.0.0'
+  contact:
+    name: Lux Industries
+    url: https://lux.network
+
+servers:
+  - url: https://api.lux.network/v1
+  - url: https://api-test.lux.network/v1
+  - url: https://api-dev.lux.network/v1
+
+tags:
+  - name: State
+    description: Read methods over chain state.
+  - name: Validators
+    description: Validator-set queries.
+  - name: Chains
+    description: Chain registry queries.
+  - name: Network
+    description: L1 registry queries.
+  - name: Stake
+    description: Stake + reward-pool queries.
+  - name: Tx
+    description: Transaction issuance and lookup.
+  - name: Sovereign
+    description: v1 atomic primitive for sovereign-L1 launch.
+
+paths:
+  /ext/bc/P:
+    post:
+      summary: P-Chain JSON-RPC
+      operationId: pchain.rpc
+      description: |
+        All P-Chain operations dispatch through a single JSON-RPC
+        endpoint. The `method` field selects the operation; the
+        `params` shape follows the operation's request schema.
+
+        Method dispatch lives in
+        `~/work/lux/node/vms/platformvm/service.go`. The handler is
+        mounted at `vm.CreateHandlers()` (vm.go:761).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/GetHeightRequest'
+                - $ref: '#/components/schemas/GetBlockByHeightRequest'
+                - $ref: '#/components/schemas/GetTimestampRequest'
+                - $ref: '#/components/schemas/GetCurrentSupplyRequest'
+                - $ref: '#/components/schemas/GetCurrentValidatorsRequest'
+                - $ref: '#/components/schemas/GetPendingValidatorsRequest'
+                - $ref: '#/components/schemas/GetBlockchainsRequest'
+                - $ref: '#/components/schemas/GetNetRequest'
+                - $ref: '#/components/schemas/GetNetsRequest'
+                - $ref: '#/components/schemas/GetStakeRequest'
+                - $ref: '#/components/schemas/GetRewardPoolBalancesRequest'
+                - $ref: '#/components/schemas/GetMinStakeRequest'
+                - $ref: '#/components/schemas/GetTotalStakeRequest'
+                - $ref: '#/components/schemas/GetFeeConfigRequest'
+                - $ref: '#/components/schemas/GetFeeStateRequest'
+                - $ref: '#/components/schemas/IssueTxRequest'
+                - $ref: '#/components/schemas/GetTxRequest'
+                - $ref: '#/components/schemas/GetTxStatusRequest'
+                - $ref: '#/components/schemas/ValidatedByRequest'
+                - $ref: '#/components/schemas/ValidatesRequest'
+                - $ref: '#/components/schemas/GetBlockchainStatusRequest'
+                - $ref: '#/components/schemas/SampleValidatorsRequest'
+                - $ref: '#/components/schemas/GetValidatorsAtRequest'
+                - $ref: '#/components/schemas/CreateSovereignL1Request'
+      responses:
+        '200':
+          description: JSON-RPC envelope. `result` shape matches the request's `method`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonRpcResponse'
+        '400':
+          description: Malformed request.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonRpcError'
+        '500':
+          description: Server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JsonRpcError'
+
+components:
+  schemas:
+
+    # Primitives ---------------------------------------------------
+
+    NetID:
+      type: string
+      description: |
+        Base58-encoded 32-byte network identifier. Primary network is
+        the all-zero ID (`11111111111111111111111111111111LpoYY`).
+        Sovereign L1s have IDs derived from their `CreateSovereignL1`
+        tx hash.
+      example: '11111111111111111111111111111111LpoYY'
+
+    ChainID:
+      type: string
+      description: Base58-encoded 32-byte chain identifier.
+      example: 'S5bq8gFMnitrJzq55zBPiMX1MAhRQFRZXWXWhqVXBi3ViRR3b'
+
+    BlockchainID:
+      type: string
+      description: Alias for ChainID. Some legacy methods name it `blockchainID`.
+
+    NodeID:
+      type: string
+      description: |
+        Bech32-encoded node identifier prefixed with `NodeID-`.
+        20-byte ripemd160 of the node's TLS certificate.
+      example: 'NodeID-2TwSZ2oyeBK2mv7JiseEQ8m74rotDj4QR'
+
+    TxID:
+      type: string
+      description: Base58-encoded 32-byte transaction identifier.
+      example: '2asiyKwFzyNJRDswfQTdNMPLav5fCVkYn7xt7od37EDmi4eqfG'
+
+    BlockID:
+      type: string
+      description: Base58-encoded 32-byte block identifier.
+
+    PChainAddress:
+      type: string
+      description: Bech32-encoded P-Chain address with `P-lux` HRP.
+      example: 'P-lux15953qfaga3w5txjmr0fl4clu37kak0ah4gjprr'
+
+    Hex:
+      type: string
+      pattern: '^0x[0-9a-fA-F]*$'
+      description: '0x-prefixed lowercase hex string.'
+
+    Base58:
+      type: string
+      description: Base58 (Bitcoin alphabet) encoded byte string.
+
+    Uint64Str:
+      type: string
+      pattern: '^[0-9]+$'
+      description: |
+        Stringified uint64. The JSON-RPC surface returns large
+        integers as decimal strings to preserve precision in
+        Javascript clients.
+
+    Timestamp:
+      type: string
+      format: date-time
+      description: RFC 3339 UTC timestamp.
+
+    BLSPublicKey:
+      type: string
+      pattern: '^0x[0-9a-fA-F]{96}$'
+      description: BLS12-381 G1 public key, hex-encoded (48 bytes).
+
+    BLSProofOfPossession:
+      type: string
+      pattern: '^0x[0-9a-fA-F]{192}$'
+      description: BLS12-381 G2 signature over the public key, hex-encoded (96 bytes).
+
+    Signer:
+      type: object
+      required: [publicKey, proofOfPossession]
+      properties:
+        publicKey:
+          $ref: '#/components/schemas/BLSPublicKey'
+        proofOfPossession:
+          $ref: '#/components/schemas/BLSProofOfPossession'
+
+    Owner:
+      type: object
+      description: Secp256k1 fx OutputOwners.
+      required: [locktime, threshold, addresses]
+      properties:
+        locktime:
+          $ref: '#/components/schemas/Uint64Str'
+        threshold:
+          $ref: '#/components/schemas/Uint64Str'
+        addresses:
+          type: array
+          items:
+            $ref: '#/components/schemas/PChainAddress'
+
+    Validator:
+      type: object
+      required: [txID, nodeID, startTime, endTime, weight]
+      properties:
+        txID:
+          $ref: '#/components/schemas/TxID'
+        nodeID:
+          $ref: '#/components/schemas/NodeID'
+        startTime:
+          $ref: '#/components/schemas/Uint64Str'
+        endTime:
+          $ref: '#/components/schemas/Uint64Str'
+        weight:
+          $ref: '#/components/schemas/Uint64Str'
+        validationRewardOwner:
+          $ref: '#/components/schemas/Owner'
+        delegationRewardOwner:
+          $ref: '#/components/schemas/Owner'
+        signer:
+          $ref: '#/components/schemas/Signer'
+        delegationFee:
+          type: string
+          description: Delegation fee in 4-decimal percentage (e.g. "20.0000").
+
+    ConvertNetworkToL1Validator:
+      type: object
+      description: |
+        Genesis validator entry for `CreateSovereignL1`. Same shape
+        the L1-conversion path uses, so verify/sort plumbing is shared.
+
+        Canonical implementation:
+        `~/work/lux/node/vms/platformvm/txs/convert_net_to_l1_tx.go`.
+      required: [nodeID, weight, balance, signer, remainingBalanceOwner, deactivationOwner]
+      properties:
+        nodeID:
+          $ref: '#/components/schemas/NodeID'
+        weight:
+          $ref: '#/components/schemas/Uint64Str'
+        balance:
+          type: string
+          description: Initial balance funding the validator's continuous fee.
+        signer:
+          $ref: '#/components/schemas/Signer'
+        remainingBalanceOwner:
+          $ref: '#/components/schemas/Owner'
+        deactivationOwner:
+          $ref: '#/components/schemas/Owner'
+
+    SovereignL1Chain:
+      type: object
+      description: |
+        One chain on a newly-minted sovereign L1.
+        Canonical implementation:
+        `~/work/lux/node/vms/platformvm/txs/create_sovereign_l1_tx.go:86`.
+      required: [blockchainName, vmID, fxIDs, genesisData]
+      properties:
+        blockchainName:
+          type: string
+          maxLength: 128
+          description: |
+            Human-readable name. Must be ASCII letters, numbers, or
+            spaces. Need not be unique across the L1's chains.
+        vmID:
+          $ref: '#/components/schemas/ChainID'
+          description: VM identifier — `EVM`, `XVM`, custom plugin ID.
+        fxIDs:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChainID'
+          description: |
+            Feature-extension IDs running on this chain. Must be
+            sorted and unique.
+        genesisData:
+          type: string
+          description: |
+            Base58-encoded genesis state blob. Bounded by MaxGenesisLen
+            (currently 1 MiB).
+
+    PQProfile:
+      type: string
+      enum: [classical, hybrid, strict-pq]
+      description: |
+        Post-quantum profile in effect for the new L1. `classical`
+        permits classical ECDSA/BLS only. `hybrid` requires hybrid
+        classical + ML-DSA-65 / ML-KEM-768. `strict-pq` refuses
+        classical signatures entirely (precompile gates active —
+        see `contract.RefuseUnderStrictPQ`).
+
+    ChainSpec:
+      type: object
+      description: Existing-chain registry entry returned by `platform.getBlockchains`.
+      required: [id, name, netID, vmID]
+      properties:
+        id:
+          $ref: '#/components/schemas/ChainID'
+        name:
+          type: string
+        netID:
+          $ref: '#/components/schemas/NetID'
+        vmID:
+          $ref: '#/components/schemas/ChainID'
+
+    # JSON-RPC envelopes -------------------------------------------
+
+    JsonRpcResponse:
+      type: object
+      required: [jsonrpc, id, result]
+      properties:
+        jsonrpc:
+          type: string
+          enum: ['2.0']
+        id:
+          oneOf:
+            - type: string
+            - type: integer
+        result:
+          type: object
+
+    JsonRpcError:
+      type: object
+      required: [jsonrpc, id, error]
+      properties:
+        jsonrpc:
+          type: string
+          enum: ['2.0']
+        id:
+          oneOf:
+            - type: string
+            - type: integer
+            - type: 'null'
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: integer
+              description: |
+                Standard JSON-RPC error codes apply: `-32700` parse
+                error, `-32600` invalid request, `-32601` method
+                not found, `-32602` invalid params, `-32603` internal.
+                P-Chain-specific codes: `-32000` chain not bootstrapped,
+                `-32001` tx already accepted, `-32002` tx rejected by
+                mempool verifier.
+            message:
+              type: string
+            data:
+              description: Optional implementation-specific error context.
+
+    # Method requests ----------------------------------------------
+
+    GetHeightRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['platform.getHeight'] }
+        params:
+          type: object
+          description: |
+            Returns the height of the last accepted P-Chain block.
+            Canonical impl: `vms/platformvm/service.go:GetHeight`.
+
+    GetBlockByHeightRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['platform.getBlockByHeight'] }
+        params:
+          type: object
+          required: [height]
+          properties:
+            height:
+              $ref: '#/components/schemas/Uint64Str'
+            encoding:
+              type: string
+              enum: [hex, json]
+              default: hex
+          description: |
+            Canonical impl: `vms/platformvm/service.go:GetBlockByHeight`.
+
+    GetTimestampRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['platform.getTimestamp'] }
+        params: { type: object }
+
+    GetCurrentSupplyRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['platform.getCurrentSupply'] }
+        params:
+          type: object
+          properties:
+            netID:
+              $ref: '#/components/schemas/NetID'
+          description: |
+            Canonical impl: `vms/platformvm/service.go:GetCurrentSupply`.
+
+    GetCurrentValidatorsRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['platform.getCurrentValidators'] }
+        params:
+          type: object
+          properties:
+            netID:
+              $ref: '#/components/schemas/NetID'
+            nodeIDs:
+              type: array
+              items: { $ref: '#/components/schemas/NodeID' }
+          description: |
+            Canonical impl: `vms/platformvm/service.go:GetCurrentValidators`.
+
+    GetPendingValidatorsRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['platform.getPendingValidators'] }
+        params:
+          type: object
+          properties:
+            netID:
+              $ref: '#/components/schemas/NetID'
+            nodeIDs:
+              type: array
+              items: { $ref: '#/components/schemas/NodeID' }
+
+    GetBlockchainsRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['platform.getBlockchains'] }
+        params: { type: object }
+
+    GetNetRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['platform.getNet'] }
+        params:
+          type: object
+          required: [netID]
+          properties:
+            netID:
+              $ref: '#/components/schemas/NetID'
+
+    GetNetsRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['platform.getNets'] }
+        params:
+          type: object
+          properties:
+            ids:
+              type: array
+              items: { $ref: '#/components/schemas/NetID' }
+          description: |
+            Canonical name post-scrub. Returns the list of L1
+            registrations on the primary network.
+            Canonical impl: `vms/platformvm/service.go:GetNets`.
+
+    GetStakeRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['platform.getStake'] }
+        params:
+          type: object
+          properties:
+            addresses:
+              type: array
+              items: { $ref: '#/components/schemas/PChainAddress' }
+            encoding:
+              type: string
+              enum: [hex, json]
+
+    GetRewardPoolBalancesRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['platform.getRewardPoolBalances'] }
+        params:
+          type: object
+
+    GetMinStakeRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['platform.getMinStake'] }
+        params:
+          type: object
+          properties:
+            netID:
+              $ref: '#/components/schemas/NetID'
+
+    GetTotalStakeRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['platform.getTotalStake'] }
+        params:
+          type: object
+          properties:
+            netID:
+              $ref: '#/components/schemas/NetID'
+
+    GetFeeConfigRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['platform.getFeeConfig'] }
+        params: { type: object }
+
+    GetFeeStateRequest:
+      type: object
+      required: [jsonrpc, id, method]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['platform.getFeeState'] }
+        params: { type: object }
+
+    IssueTxRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['platform.issueTx'] }
+        params:
+          type: object
+          required: [tx]
+          properties:
+            tx:
+              type: string
+              description: hex-encoded signed tx bytes.
+            encoding:
+              type: string
+              enum: [hex]
+              default: hex
+          description: |
+            Issues a signed transaction to the P-Chain mempool.
+            Canonical impl: `vms/platformvm/service.go:IssueTx`.
+
+    GetTxRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['platform.getTx'] }
+        params:
+          type: object
+          required: [txID]
+          properties:
+            txID:
+              $ref: '#/components/schemas/TxID'
+            encoding:
+              type: string
+              enum: [hex, json]
+              default: hex
+
+    GetTxStatusRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['platform.getTxStatus'] }
+        params:
+          type: object
+          required: [txID]
+          properties:
+            txID:
+              $ref: '#/components/schemas/TxID'
+
+    ValidatedByRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['platform.validatedBy'] }
+        params:
+          type: object
+          required: [blockchainID]
+          properties:
+            blockchainID:
+              $ref: '#/components/schemas/BlockchainID'
+
+    ValidatesRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['platform.validates'] }
+        params:
+          type: object
+          required: [netID]
+          properties:
+            netID:
+              $ref: '#/components/schemas/NetID'
+
+    GetBlockchainStatusRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['platform.getBlockchainStatus'] }
+        params:
+          type: object
+          required: [blockchainID]
+          properties:
+            blockchainID:
+              $ref: '#/components/schemas/BlockchainID'
+
+    SampleValidatorsRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['platform.sampleValidators'] }
+        params:
+          type: object
+          required: [size]
+          properties:
+            netID:
+              $ref: '#/components/schemas/NetID'
+            size:
+              type: integer
+
+    GetValidatorsAtRequest:
+      type: object
+      required: [jsonrpc, id, method, params]
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['platform.getValidatorsAt'] }
+        params:
+          type: object
+          required: [height]
+          properties:
+            height: { $ref: '#/components/schemas/Uint64Str' }
+            netID: { $ref: '#/components/schemas/NetID' }
+
+    # The v1 atomic primitive --------------------------------------
+
+    CreateSovereignL1Request:
+      type: object
+      required: [jsonrpc, id, method, params]
+      description: |
+        **The v1 atomic primitive.** Atomically registers a new sovereign
+        L1 on the primary network's P-Chain. Combines what was four
+        sequential transactions —
+
+            CreateNetworkTx
+              + AddChainValidatorTx (×N)
+              + CreateChainTx (×K)
+              + ConvertNetworkToL1Tx
+
+        into a single tx that either lands wholly or reverts wholly.
+
+        After this tx finalises, the primary network has a permanent
+        record of:
+
+          - the L1's network ID (derived from the tx hash)
+          - the L1's genesis validator set (NodeIDs + BLS PoPs + weights)
+          - the L1's chain manifest (per-chain VM ID + genesis blob)
+          - the on-chain validator-manager contract address
+
+        The primary network does NOT track-chain or validate the L1's
+        blocks. The L1's own validators run their own consensus
+        independently from genesis. Subsequent validator-set changes
+        flow through the on-chain manager via warp messages.
+
+        Atomicity contract:
+        - either every chain lands AND the sovereign-network record
+          is written AND the genesis validator set is committed, OR
+        - the tx fails and none of the above is written.
+
+        Canonical implementation:
+        `~/work/lux/node/vms/platformvm/txs/create_sovereign_l1_tx.go`
+        and `~/work/lux/node/vms/platformvm/txs/executor/standard_tx_executor.go:635`.
+
+        LP cross-ref slot reserved (the sovereign-L1 launch LP is
+        scheduled alongside LP-016..021).
+      properties:
+        jsonrpc: { type: string, enum: ['2.0'] }
+        id: { oneOf: [{type: string}, {type: integer}] }
+        method: { type: string, enum: ['platform.createSovereignL1'] }
+        params:
+          type: object
+          required: [validators, chains, managerChainIdx, managerAddress, owner]
+          properties:
+            owner:
+              $ref: '#/components/schemas/Owner'
+              description: |
+                Owner of the network registration record. Authorises
+                future admin txs against the network record on P-Chain
+                (delisting, owner rotation).
+            validators:
+              type: array
+              minItems: 1
+              items:
+                $ref: '#/components/schemas/ConvertNetworkToL1Validator'
+              description: |
+                Genesis validator set. These NodeIDs are seeded into
+                the validator-manager contract at L1 genesis; no
+                separate AddPermissionlessValidator calls required.
+            chains:
+              type: array
+              minItems: 1
+              maxItems: 16
+              items:
+                $ref: '#/components/schemas/SovereignL1Chain'
+              description: |
+                Chains to register at L1 genesis. Each entry is one
+                chain on the new L1. The new L1's network ID is
+                derived from this tx's hash; chains inherit it.
+                Capped at 16 entries (MaxSovereignL1Chains).
+            managerChainIdx:
+              type: integer
+              minimum: 0
+              maximum: 15
+              description: |
+                Index into `chains[]` of the chain that hosts the
+                validator-manager contract. The L1's validator-set
+                authority lives at
+                `(chains[managerChainIdx], managerAddress)`.
+            managerAddress:
+              type: string
+              description: |
+                Hex-encoded address of the validator-manager contract
+                on the manager chain. Bounded by `MaxChainAddressLength`.
+            pqProfile:
+              $ref: '#/components/schemas/PQProfile'
+              description: |
+                Post-quantum profile in effect for the new L1.
+                Defaults to `hybrid` for newly minted L1s.
+            encoding:
+              type: string
+              enum: [hex]
+              default: hex
