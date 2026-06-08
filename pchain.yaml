@@ -13,14 +13,26 @@ info:
     Transactions on the P-Chain mutate that registry. RPC reads expose
     its state. The v1 atomic primitive `platform.createSovereignL1`
     collapses what was a four-tx sequence (CreateNetworkTx +
-    AddChainValidatorTx ×N + CreateChainTx ×K + ConvertNetworkToL1Tx)
+    AddValidatorTx ×N + CreateChainTx ×K + ConvertNetworkToL1Tx)
     into a single tx that either lands wholly or reverts wholly.
+
+    Decomplected model: validators validate **networks**, not chains.
+    Chains live on networks (created by `CreateChainTx`). `AddValidatorTx`
+    is the universal "add a validator to a network" transaction —
+    same wire shape whether the target network is the Lux primary
+    network (networkID 1/2/3/1337) or a sovereign L1's own primary
+    network (a downstream L1 anchored to its own networkID). The
+    wallet/SDK figures out which network to target from its
+    connection context.
+
+    `AddChainValidatorTx` is legacy and retained for one release cycle of
+    wire compatibility; new clients should issue `AddValidatorTx`.
 
     All methods are JSON-RPC 2.0. Mount point on every node:
     `/ext/bc/P` (or aliased as `/ext/P` post v1.28).
 
     Canonical implementation: `~/work/lux/node/vms/platformvm/service.go`.
-  version: '1.0.0'
+  version: '1.0.1'
   contact:
     name: Lux Industries
     url: https://lux.network
@@ -698,11 +710,19 @@ components:
         sequential transactions —
 
             CreateNetworkTx
-              + AddChainValidatorTx (×N)
+              + AddValidatorTx (×N)
               + CreateChainTx (×K)
               + ConvertNetworkToL1Tx
 
         into a single tx that either lands wholly or reverts wholly.
+
+        `AddValidatorTx` here is the canonical universal validator-add
+        transaction — same tx whether the target is the Lux primary
+        network or the about-to-be-sovereign L1's primary. The L1's
+        validator set is materialized at sovereign-birth time via this
+        sequence executed against the parent (Lux) primary network's
+        P-chain; subsequent validator-set changes flow through the L1's
+        on-chain manager contract.
 
         After this tx finalises, the primary network has a permanent
         record of:
