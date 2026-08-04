@@ -15,10 +15,10 @@ intent to ship v2.
 - X-Chain JSON-RPC — UTXO settlement surface.
 - C-Chain JSON-RPC — `eth_*` subset + `admin_importChain`. 18 active
   precompiles at fixed slot addresses.
-- `/ext/info` — 14 methods.
-- `/ext/admin` — 21 methods (operator-only).
-- `/ext/health` — 3 endpoints (liveness, readiness, deep).
-- `/ext/metrics` — Prometheus scrape.
+- `/v1/info` — 14 methods.
+- `/v1/admin` — 21 methods (operator-only).
+- `/v1/health` — 3 endpoints (liveness, readiness, deep).
+- `/v1/metrics` — Prometheus scrape.
 - Keystore — 5 methods (off by default in production).
 - Warp — 3 publish/unpublish methods + cross-chain message envelope.
 - ZAP — binary transport, X25519 + ML-KEM-768 hybrid PQ handshake.

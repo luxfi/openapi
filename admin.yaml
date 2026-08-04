@@ -6,7 +6,7 @@ info:
     `--api-admin-enabled=true`. When enabled, the admin endpoint
     requires an admin token (`--admin-api-secret`).
 
-    All methods are JSON-RPC 2.0. Mount point: `/ext/admin`.
+    All methods are JSON-RPC 2.0. Mount point: `/v1/admin`.
 
     Canonical implementation: `~/work/lux/node/service/admin/service.go`.
   version: '1.0.0'
@@ -32,7 +32,7 @@ tags:
     description: Database snapshot + restore.
 
 paths:
-  /ext/admin:
+  /v1/admin:
     post:
       summary: Admin JSON-RPC
       operationId: admin.rpc
@@ -88,7 +88,7 @@ components:
       scheme: bearer
       description: |
         Admin token configured via `--admin-api-secret`. Required for
-        every method on `/ext/admin`.
+        every method on `/v1/admin`.
 
   schemas:
 

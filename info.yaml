@@ -6,7 +6,7 @@ info:
     bootstrap status, fee schedule, and the local node's identity.
     Safe to expose publicly; no admin token required.
 
-    All methods are JSON-RPC 2.0. Mount point: `/ext/info`.
+    All methods are JSON-RPC 2.0. Mount point: `/v1/info`.
 
     Canonical implementation: `~/work/lux/node/service/info/service.go`.
   version: '1.0.0'
@@ -30,7 +30,7 @@ tags:
     description: Fee schedule + upgrade timeline.
 
 paths:
-  /ext/info:
+  /v1/info:
     post:
       summary: Info JSON-RPC
       operationId: info.rpc

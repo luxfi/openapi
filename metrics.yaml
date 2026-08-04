@@ -25,7 +25,7 @@ servers:
   - url: https://api-dev.lux.network/v1
 
 paths:
-  /ext/metrics:
+  /v1/metrics:
     get:
       summary: Prometheus scrape.
       operationId: metrics.scrape

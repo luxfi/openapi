@@ -29,7 +29,7 @@ info:
     wire compatibility; new clients should issue `AddValidatorTx`.
 
     All methods are JSON-RPC 2.0. Mount point on every node:
-    `/ext/bc/P` (or aliased as `/ext/P` post v1.28).
+    `/v1/bc/P` (or aliased as `/ext/P` post v1.28).
 
     Canonical implementation: `~/work/lux/node/vms/platformvm/service.go`.
   version: '1.0.1'
@@ -59,7 +59,7 @@ tags:
     description: v1 atomic primitive for sovereign-L1 launch.
 
 paths:
-  /ext/bc/P:
+  /v1/bc/P:
     post:
       summary: P-Chain JSON-RPC
       operationId: pchain.rpc

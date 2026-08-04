@@ -14,7 +14,7 @@ info:
     via `platform.createSovereignL1` has its own EVM and does NOT depend
     on the C-Chain.
 
-    All methods are JSON-RPC 2.0. Mount point: `/ext/bc/C/rpc`.
+    All methods are JSON-RPC 2.0. Mount point: `/v1/bc/C/rpc`.
 
     Canonical implementation: `~/work/lux/evm/` (Coreth-derived).
   version: '1.0.0'
@@ -44,7 +44,7 @@ tags:
     description: Active precompile contract surface.
 
 paths:
-  /ext/bc/C/rpc:
+  /v1/bc/C/rpc:
     post:
       summary: C-Chain JSON-RPC
       operationId: cchain.rpc

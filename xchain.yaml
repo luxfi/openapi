@@ -7,7 +7,7 @@ info:
     atomic swap. UTXO model, deterministic finality, no contract
     bytecode.
 
-    All methods are JSON-RPC 2.0. Mount point: `/ext/bc/X`.
+    All methods are JSON-RPC 2.0. Mount point: `/v1/bc/X`.
 
     Canonical implementation: `~/work/lux/node/vms/xvm/service.go`.
   version: '1.0.0'
@@ -33,7 +33,7 @@ tags:
     description: Send + import + export (requires keystore).
 
 paths:
-  /ext/bc/X:
+  /v1/bc/X:
     post:
       summary: X-Chain JSON-RPC
       operationId: xchain.rpc

@@ -15,10 +15,10 @@ documented here is **Final**. There is no v0; there will be no v2.
 | `pchain.yaml` | P-Chain — validator registry, sovereign-L1 launch, chain manifest | JSON-RPC |
 | `xchain.yaml` | X-Chain — UTXO settlement | JSON-RPC |
 | `cchain.yaml` | C-Chain — primary EVM (`eth_*`) + node admin | JSON-RPC |
-| `info.yaml`   | `/ext/info` — chain state, peers, bootstrap | JSON-RPC |
-| `admin.yaml`  | `/ext/admin` — alias management, plugin management | JSON-RPC |
-| `health.yaml` | `/ext/health` — liveness, readiness, deep checks | REST + JSON-RPC |
-| `metrics.yaml`| `/ext/metrics` — Prometheus scrape | REST (text) |
+| `info.yaml`   | `/v1/info` — chain state, peers, bootstrap | JSON-RPC |
+| `admin.yaml`  | `/v1/admin` — alias management, plugin management | JSON-RPC |
+| `health.yaml` | `/v1/health` — liveness, readiness, deep checks | REST + JSON-RPC |
+| `metrics.yaml`| `/v1/metrics` — Prometheus scrape | REST (text) |
 | `keystore.yaml` | local keystore (off in production) | JSON-RPC |
 | `warp.yaml`   | cross-chain message verification | JSON-RPC |
 | `zap.yaml`    | binary RPC transport (X25519 + ML-KEM-768) | binary |
