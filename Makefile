@@ -10,12 +10,12 @@ openapi-lint:
 HOST ?= https://api.lux.network
 
 openapi-fixtures:
-	@curl -sS $(HOST)/ext/info -X POST -H "Content-Type: application/json" \
+	@curl -sS $(HOST)/v1/info -X POST -H "Content-Type: application/json" \
 		-d '{"jsonrpc":"2.0","id":1,"method":"info.getNetworkID"}' \
 		| python3 -m json.tool > fixtures/info-getNetworkID-response.json
-	@curl -sS $(HOST)/ext/health/liveness \
+	@curl -sS $(HOST)/v1/health/liveness \
 		| python3 -m json.tool > fixtures/health-liveness-response.json
-	@curl -sS $(HOST)/ext/bc/P -X POST -H "Content-Type: application/json" \
+	@curl -sS $(HOST)/v1/bc/P -X POST -H "Content-Type: application/json" \
 		-d '{"jsonrpc":"2.0","id":1,"method":"platform.getHeight"}' \
 		| python3 -m json.tool > fixtures/pchain-getHeight-response.json
 	@echo "fixtures refreshed against $(HOST)"
