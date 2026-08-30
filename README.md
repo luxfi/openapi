@@ -17,7 +17,7 @@ documented here is **Final**. There is no v0; there will be no v2.
 | `cchain.yaml` | C-Chain — primary EVM (`eth_*`) + node admin | JSON-RPC |
 | `info.yaml`   | `/v1/info` — chain state, peers, bootstrap | JSON-RPC |
 | `admin.yaml`  | `/v1/admin` — alias management, plugin management | JSON-RPC |
-| `health.yaml` | `/v1/health` — liveness, readiness, deep checks | REST + JSON-RPC |
+| `health.yaml` | `/v1/health/ops/health` — liveness, readiness, deep checks | REST + JSON-RPC |
 | `metrics.yaml`| `/v1/metrics` — Prometheus scrape | REST (text) |
 | `keystore.yaml` | local keystore (off in production) | JSON-RPC |
 | `warp.yaml`   | cross-chain message verification | JSON-RPC |
