@@ -17,7 +17,7 @@ info:
 
     All methods are JSON-RPC 2.0. Mount point: `/ext/warp` (operator
     surface) and warp-payload retrieval per-chain at
-    `/v1/bc/<chain>/warp`.
+    `/v1/chain/<chain>/warp`.
 
     Canonical implementation: `~/work/lux/node/vms/platformvm/warp/`
     and `~/work/lux/node/service/warp/service.go`.
