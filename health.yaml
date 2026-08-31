@@ -27,7 +27,7 @@ servers:
   - url: https://api-dev.lux.network/v1
 
 paths:
-  /v1/health/liveness:
+  /v1/health/ops/liveness:
     get:
       summary: Liveness probe.
       operationId: health.liveness.get
@@ -44,7 +44,7 @@ paths:
         '503':
           description: Process unhealthy.
 
-  /v1/health/readiness:
+  /v1/health/ops/readiness:
     get:
       summary: Readiness probe.
       operationId: health.readiness.get
